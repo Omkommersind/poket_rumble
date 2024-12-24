@@ -1,0 +1,134 @@
+PLAYER_A_CARD_FIELD_GUID = '219bb8'
+PLAYER_A_TEXT_GUID = 'bf5ef9'
+
+PLAYER_B_CARD_FIELD_GUID = 'e603bc'
+PLAYER_B_TEXT_GUID = 'f6df8a'
+
+DICE_TAG = 'DICE'
+PLAYER_A_TAG = 'PlayerA'
+PLAYER_B_TAG = 'PlayerB'
+
+-- Todo: load from file if possible
+-- 1 attack1_type
+-- 2 attack1_value
+-- 3 attack1_type
+-- 4 attack1_value
+CARDS = {
+    ['Charmander'] = {
+        'fire',
+        30,
+        nil,
+        nil,
+    },
+    ['Pidgey'] = {
+        'normal',
+        10,
+        'flying',
+        20,
+    },
+}
+
+PlayerADiceVal = -1
+PlayerACardData = nil
+PlayerAText = nil
+
+PlayerBDiceVal = -1
+PlayerBCardData = nil
+PlayerBText = nil
+
+function onLoad(save_state)
+    PlayerAText = getObjectFromGUID(PLAYER_A_TEXT_GUID)
+    PlayerBText = getObjectFromGUID(PLAYER_B_TEXT_GUID)
+end
+
+function onObjectEnterScriptingZone(zone, obj)
+    -- Todo: refactor
+    if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
+        print('PLAYER_A_CARD_FIELD_GUID entered')
+        objName = obj.getName()
+        data = tryGetCardDataByName(objName)
+        if data == nil then
+            print('Card not recognized: ' .. objName)
+            return
+        else
+            PlayerACardData = data
+        end
+    end
+
+    if zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
+        print('PLAYER_B_CARD_FIELD_GUID entered')
+        objName = obj.getName()
+        data = tryGetCardDataByName(objName)
+        if data == nil then
+            print('Card not recognized: ' .. objName)
+            return
+        else
+            PlayerBCardData = data
+        end
+    end
+end
+
+function onObjectRandomize(obj,  player_color)
+    if obj.hasTag(DICE_TAG) then
+        handleDiceRandomize(obj)
+    end
+end
+
+function tryGetCardDataByName(name)
+    for key, values in pairs(CARDS) do
+        if key == name then
+            data = {}
+            data.attackAType = values[1]
+            data.attackAValue = values[2]
+            data.attackBType = values[3]
+            data.attackBValue = values[4]
+            return data
+        end
+    end
+    return nil
+end
+
+function handleDiceRandomize(obj)
+    Wait.condition(
+        function() -- Executed after our condition is met
+            if obj.isDestroyed() then
+                print("Die was destroyed before it came to rest.")
+            else
+                value = obj.getRotationValue()
+
+                -- Todo: refactor
+                if obj.hasTag(PLAYER_A_TAG) then
+                    print('PLAYER A rolled ' .. tostring(value))
+                    PlayerADiceVal = value
+                    countBestValueForPlayer(PLAYER_A_TAG)
+                end
+                if obj.hasTag(PLAYER_B_TAG) then
+                    print('PLAYER B rolled ' .. tostring(value))
+                    PlayerBDiceVal = value
+                    countBestValueForPlayer(PLAYER_B_TAG)
+                end
+            end
+        end,
+        function() -- Condition function
+            return obj.isDestroyed() or obj.resting
+        end
+    )
+end
+
+function countBestValueForPlayer(playerTag)
+    -- Todo: refactor
+    if playerTag == PLAYER_A_TAG then
+        if PlayerADiceVal == -1 or PlayerACardData == nil or PlayerBCardData == nil then
+            return
+        end
+
+        -- Todo: get best attack for type
+        attackValue = PlayerACardData.attackAValue
+        result = PlayerADiceVal + attackValue
+        print('Attack used: ' .. '(' .. PlayerACardData.attackAType .. ')')
+        print('...attack final value is ' .. tostring(attackValue))
+        print('...die value is ' .. tostring(PlayerADiceVal))
+        print('...make final result ' .. tostring(result))
+        PlayerAText.setValue(tostring(result))
+    end
+end
