@@ -8,29 +8,52 @@ DICE_TAG = 'DICE'
 PLAYER_A_TAG = 'PlayerA'
 PLAYER_B_TAG = 'PlayerB'
 
--- Todo: load from file if possible
--- 1 attack1_type
--- 2 attack1_value
--- 3 attack1_type
--- 4 attack1_value
+-- Cards are defined in another component (zone)
+-- 1: pType
+-- 1: attackA.name
+-- 2: attackA.type
+-- 3: attackA.value
+-- 4: attackB.name
+-- 5: attackB.type
+-- 6: attackB.val
 CARDS = {
-    ['Charmander'] = {'fire', 30, nil, nil},
-    ['Pidgey'] = {'normal', 10, 'flying', 20},
+    ['Charmander'] = {'fire', 'Heat Tackle', 'fire', 30, nil, nil, nil},
+    ['Bulbasaur'] = {'grass', 'Leech Seed', 'grass', 30, nil, nil, nil},
+    ['Squirtle'] = {'water', 'Tackle', 'normal', 10, 'Rain Splash', 'water', 20},
+    ['Pidgey'] = {'flying', 'Tackle', 'normal', 10, 'Gust', 'flying', 20},
+    ['Caterpie'] = {'bug', 'String Shot', 'bug', 20, nil, nil, nil},
+    ['Gastly'] = {'ghost', 'Confuse Ray', 'ghost', 20, nil, nil, nil},
+}
+
+DAMAGE = {
+    ['normal'] = {
+        ['no'] = {'ghost'},
+        ['half'] = {'rock', 'steel'},
+        ['double'] = {}
+    },
+    ['fire'] = {
+        ['no'] = {},
+        ['half'] = {'fire', 'water', 'rock', 'dragon'},
+        ['double'] = {'grass', 'ice', 'bug', 'steel'}
+    }
 }
 
 Players = {}
 PlayerA = {}
 PlayerB = {}
 
+-- EVENTS
 function onLoad(save_state)
     PlayerAText = getObjectFromGUID(PLAYER_A_TEXT_GUID)
     PlayerBText = getObjectFromGUID(PLAYER_B_TEXT_GUID)
 
+    PlayerA.name = 'Red'
     PlayerA.tag = PLAYER_A_TAG
     PlayerA.diceVal = -1
     PlayerA.text = PlayerAText
     PlayerA.card = nil
 
+    PlayerB.name = 'Blue'
     PlayerB.tag = PLAYER_B_TAG
     PlayerB.diceVal = -1
     PlayerB.text = PlayerBText
@@ -38,27 +61,36 @@ function onLoad(save_state)
 end
 
 function onObjectEnterScriptingZone(zone, obj)
-    -- Todo: refactor
     if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
-        objName = obj.getName()
-        data = tryGetCardDataByName(objName)
-        if data == nil then
-            print('Card not recognized: ' .. objName)
-            return
-        else
-            PlayerA.card = data
-        end
+        player = PlayerA
+    elseif zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
+        player = PlayerB
+    else
+        return
     end
 
-    if zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
-        objName = obj.getName()
-        data = tryGetCardDataByName(objName)
-        if data == nil then
-            print('Card not recognized: ' .. objName)
-            return
-        else
-            PlayerB.card = data
-        end
+    objName = obj.getName()
+    data = tryGetCardDataByName(objName)
+    if data == nil then
+        print('Card not recognized: ' .. objName)
+        return
+    else
+        player.card = data
+    end
+end
+
+function onObjectLeaveScriptingZone(zone, obj)
+    if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
+        player = PlayerA
+    elseif zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
+        player = PlayerB
+    else
+        return
+    end
+
+    if #zone.getObjects() == 0 then
+        player.card = nil
+        player.text.setValue('0')
     end
 end
 
@@ -68,14 +100,53 @@ function onObjectRandomize(obj,  player_color)
     end
 end
 
+-- FUNCTIONS
+function tryGetDamageMultiplier(attackType, defenceType)
+    for key, values in pairs(DAMAGE) do
+        if key == attackType then
+            for i, value in ipairs(DAMAGE[key]['no']) do
+                print(value)
+                if value == defenceType then
+                    return 0
+                end
+            end
+
+            for i, value in ipairs(DAMAGE[key]['half']) do
+                print(value)
+                if value == defenceType then
+                    return 0.5
+                end
+            end
+
+            for i, value in ipairs(DAMAGE[key]['double']) do
+                print(value)
+                if value == defenceType then
+                    return 2
+                end
+            end
+
+            return 1
+        end
+    end
+    print('attackType ' .. attackType .. ' not found in DAMAGE table')
+end
+
 function tryGetCardDataByName(name)
     for key, values in pairs(CARDS) do
         if key == name then
             data = {}
-            data.attackAType = values[1]
-            data.attackAValue = values[2]
-            data.attackBType = values[3]
-            data.attackBValue = values[4]
+            data.pokemon = key
+            data.ptype = values[1]
+
+            data.attackA = {}
+            data.attackA.name = values[2]
+            data.attackA.type = values[3]
+            data.attackA.value = values[4]
+
+            data.attackB = {}
+            data.attackB.name = values[5]
+            data.attackB.type = values[6]
+            data.attackB.value = values[7]
             return data
         end
     end
@@ -90,14 +161,11 @@ function handleDiceRandomize(obj)
             else
                 value = obj.getRotationValue()
 
-                -- Todo: refactor
                 if obj.hasTag(PLAYER_A_TAG) then
-                    print('PLAYER A rolled ' .. tostring(value))
                     PlayerA.diceVal = value
                     countBestValueForPlayer(PlayerA, PlayerB)
                 end
                 if obj.hasTag(PLAYER_B_TAG) then
-                    print('PLAYER B rolled ' .. tostring(value))
                     PlayerB.diceVal = value
                     countBestValueForPlayer(PlayerB, PlayerA)
                 end
@@ -114,11 +182,18 @@ function countBestValueForPlayer(player, enemy)
         return
     end
 
-    attackValue = player.card.attackAValue
-    result = player.diceVal + attackValue
-    print('Attack used: ' .. '(' .. player.card.attackAType .. ')')
-    print('...attack final value is ' .. tostring(attackValue))
+    multiplier = tryGetDamageMultiplier(player.card.attackA.type, enemy.card.ptype)
+    attackValue = player.card.attackA.value
+    print(player.card.pokemon .. ' uses ' .. player.card.attackA.name .. ' (' .. player.card.attackA.type .. ', ' .. tostring(attackValue) .. ')')
+    print('...multiplier is x' .. tostring(multiplier))
     print('...die value is ' .. tostring(player.diceVal))
-    print('...make final result ' .. tostring(result))
-    player.text.setValue(tostring(result))
+
+    result = (player.diceVal + attackValue) * multiplier
+    print('...final result is ' .. tostring(result))
+
+    if multiplier ~= 1 then
+        player.text.setValue(tostring(result) .. ' (x' .. multiplier .. ')')
+    else
+        player.text.setValue(tostring(result))
+    end
 end
