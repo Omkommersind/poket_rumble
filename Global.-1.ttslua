@@ -14,56 +14,50 @@ PLAYER_B_TAG = 'PlayerB'
 -- 3 attack1_type
 -- 4 attack1_value
 CARDS = {
-    ['Charmander'] = {
-        'fire',
-        30,
-        nil,
-        nil,
-    },
-    ['Pidgey'] = {
-        'normal',
-        10,
-        'flying',
-        20,
-    },
+    ['Charmander'] = {'fire', 30, nil, nil},
+    ['Pidgey'] = {'normal', 10, 'flying', 20},
 }
 
-PlayerADiceVal = -1
-PlayerACardData = nil
-PlayerAText = nil
-
-PlayerBDiceVal = -1
-PlayerBCardData = nil
-PlayerBText = nil
+Players = {}
+PlayerA = {}
+PlayerB = {}
 
 function onLoad(save_state)
     PlayerAText = getObjectFromGUID(PLAYER_A_TEXT_GUID)
     PlayerBText = getObjectFromGUID(PLAYER_B_TEXT_GUID)
+
+    PlayerA.tag = PLAYER_A_TAG
+    PlayerA.diceVal = -1
+    PlayerA.text = PlayerAText
+    PlayerA.card = nil
+
+    PlayerB.tag = PLAYER_B_TAG
+    PlayerB.diceVal = -1
+    PlayerB.text = PlayerBText
+    PlayerA.card = nil
 end
 
 function onObjectEnterScriptingZone(zone, obj)
     -- Todo: refactor
     if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
-        print('PLAYER_A_CARD_FIELD_GUID entered')
         objName = obj.getName()
         data = tryGetCardDataByName(objName)
         if data == nil then
             print('Card not recognized: ' .. objName)
             return
         else
-            PlayerACardData = data
+            PlayerA.card = data
         end
     end
 
     if zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
-        print('PLAYER_B_CARD_FIELD_GUID entered')
         objName = obj.getName()
         data = tryGetCardDataByName(objName)
         if data == nil then
             print('Card not recognized: ' .. objName)
             return
         else
-            PlayerBCardData = data
+            PlayerB.card = data
         end
     end
 end
@@ -99,13 +93,13 @@ function handleDiceRandomize(obj)
                 -- Todo: refactor
                 if obj.hasTag(PLAYER_A_TAG) then
                     print('PLAYER A rolled ' .. tostring(value))
-                    PlayerADiceVal = value
-                    countBestValueForPlayer(PLAYER_A_TAG)
+                    PlayerA.diceVal = value
+                    countBestValueForPlayer(PlayerA, PlayerB)
                 end
                 if obj.hasTag(PLAYER_B_TAG) then
                     print('PLAYER B rolled ' .. tostring(value))
-                    PlayerBDiceVal = value
-                    countBestValueForPlayer(PLAYER_B_TAG)
+                    PlayerB.diceVal = value
+                    countBestValueForPlayer(PlayerB, PlayerA)
                 end
             end
         end,
@@ -115,20 +109,16 @@ function handleDiceRandomize(obj)
     )
 end
 
-function countBestValueForPlayer(playerTag)
-    -- Todo: refactor
-    if playerTag == PLAYER_A_TAG then
-        if PlayerADiceVal == -1 or PlayerACardData == nil or PlayerBCardData == nil then
-            return
-        end
-
-        -- Todo: get best attack for type
-        attackValue = PlayerACardData.attackAValue
-        result = PlayerADiceVal + attackValue
-        print('Attack used: ' .. '(' .. PlayerACardData.attackAType .. ')')
-        print('...attack final value is ' .. tostring(attackValue))
-        print('...die value is ' .. tostring(PlayerADiceVal))
-        print('...make final result ' .. tostring(result))
-        PlayerAText.setValue(tostring(result))
+function countBestValueForPlayer(player, enemy)
+    if player.diceVal == -1 or player.card == nil or enemy.card == nil then
+        return
     end
+
+    attackValue = player.card.attackAValue
+    result = player.diceVal + attackValue
+    print('Attack used: ' .. '(' .. player.card.attackAType .. ')')
+    print('...attack final value is ' .. tostring(attackValue))
+    print('...die value is ' .. tostring(player.diceVal))
+    print('...make final result ' .. tostring(result))
+    player.text.setValue(tostring(result))
 end
