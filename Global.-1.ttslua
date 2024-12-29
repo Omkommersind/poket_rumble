@@ -1,8 +1,12 @@
 PLAYER_A_CARD_FIELD_GUID = '219bb8'
 PLAYER_A_TEXT_GUID = 'bf5ef9'
+PLAYER_A_ENERGY_FIELD_GUID = '53379a'
+PLAYER_A_ENERGY_TEXT_GUID = 'fb60e0'
 
 PLAYER_B_CARD_FIELD_GUID = 'e603bc'
 PLAYER_B_TEXT_GUID = 'f6df8a'
+PLAYER_B_ENERGY_FIELD_GUID = '197d1f'
+PLAYER_B_ENERGY_TEXT_GUID = 'de0bc0'
 
 DICE_TAG = 'DICE'
 PLAYER_A_TAG = 'PlayerA'
@@ -45,53 +49,123 @@ PlayerB = {}
 -- EVENTS
 function onLoad(save_state)
     PlayerAText = getObjectFromGUID(PLAYER_A_TEXT_GUID)
+    PlayerAEnergyText = getObjectFromGUID(PLAYER_A_ENERGY_TEXT_GUID)
     PlayerBText = getObjectFromGUID(PLAYER_B_TEXT_GUID)
+    PlayerBEnergyText = getObjectFromGUID(PLAYER_B_ENERGY_TEXT_GUID)
 
     PlayerA.name = 'Red'
     PlayerA.tag = PLAYER_A_TAG
     PlayerA.diceVal = -1
     PlayerA.text = PlayerAText
     PlayerA.card = nil
+    PlayerA.energy = 0
+    PlayerA.energyText = PlayerAEnergyText
 
     PlayerB.name = 'Blue'
     PlayerB.tag = PLAYER_B_TAG
     PlayerB.diceVal = -1
     PlayerB.text = PlayerBText
-    PlayerA.card = nil
+    PlayerB.card = nil
+    PlayerB.energy = 0
+    PlayerB.energyText = PlayerBEnergyText
 end
 
 function onObjectEnterScriptingZone(zone, obj)
-    if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
-        player = PlayerA
-    elseif zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
-        player = PlayerB
-    else
+    -- Todo: refactor
+    player = getPlayerByCardZone(zone)
+    if player ~= nil then
+        objName = obj.getName()
+        data = tryGetCardDataByName(objName)
+        if data == nil then
+            print('Card not recognized: ' .. objName)
+            return
+        else
+            player.card = data
+        end
         return
     end
 
-    objName = obj.getName()
-    data = tryGetCardDataByName(objName)
-    if data == nil then
-        print('Card not recognized: ' .. objName)
+    player = getPlayerByEnergyZone(zone)
+    if player ~= nil then
+        updatePlayerEnergy(player, zone)
         return
-    else
-        player.card = data
     end
 end
 
 function onObjectLeaveScriptingZone(zone, obj)
-    if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
-        player = PlayerA
-    elseif zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
-        player = PlayerB
-    else
+    player = getPlayerByCardZone(zone)
+    if player ~= nil then
+        if #zone.getObjects() == 0 then
+            player.card = nil
+            player.text.setValue('0')
+        end
         return
     end
 
-    if #zone.getObjects() == 0 then
-        player.card = nil
-        player.text.setValue('0')
+    player = getPlayerByEnergyZone(zone)
+    if player ~= nil then
+        updatePlayerEnergy(player, zone, obj)
+        return
     end
+end
+
+-- Todo: refactor
+function getPlayerByCardZone(zone)
+    if zone.getGUID() == PLAYER_A_CARD_FIELD_GUID then
+        return PlayerA
+    elseif zone.getGUID() == PLAYER_B_CARD_FIELD_GUID then
+        return PlayerB
+    else
+        return nil
+    end
+end
+
+-- Todo: refactor
+function getPlayerByEnergyZone(zone)
+    if zone.getGUID() == PLAYER_A_ENERGY_FIELD_GUID then
+        return PlayerA
+    elseif zone.getGUID() == PLAYER_B_ENERGY_FIELD_GUID then
+        return PlayerB
+    else
+        return nil
+    end
+end
+
+function updatePlayerEnergy(player, zone)
+    -- Todo: refactor
+    count = 0
+    for _, obj in ipairs(zone.getObjects()) do
+        name = obj.getName()
+        if name == 'Energy' then
+            count = count + 1
+        elseif name == 'Double Energy' then
+            count = count + 2
+        else
+            for _, cardInDeck in ipairs(obj.getObjects()) do
+                name = cardInDeck['name']
+                if name == 'Energy' then
+                    count = count + 1
+                elseif name == 'Double Energy' then
+                    count = count + 2
+                end
+            end
+        end
+    end
+    player.energy = count
+    player.energyText.setValue(tostring(count))
+    return
+end
+
+
+
+function checkObjectIsDeck(obj)
+    local data = obj.getData()
+    for _, contained in pairs(data.ContainedObjects) do
+        if contained.Name == "Deck" then
+            return true
+        end
+    end
+    return false
 end
 
 function onObjectRandomize(obj,  player_color)
